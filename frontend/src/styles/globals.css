@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-slate-200;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900;
+    @apply font-sans antialiased;
+  }
+}
+
+/* Romanian Freight Forwarder Custom Styles */
+@layer components {
+  .order-card {
+    @apply bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow;
+  }
+  
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-pending {
+    @apply bg-amber-100 text-amber-800;
+  }
+  
+  .status-assigned {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .status-in-transit {
+    @apply bg-purple-100 text-purple-800;
+  }
+  
+  .status-completed {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+  
+  .status-cancelled {
+    @apply bg-red-100 text-red-800;
+  }
+}

@@ -1,0 +1,147 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node.js
+node_modules/
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Build outputs
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# Local development
+.local/
+uploads/
+static/media/
+
+# AI/ML
+*.pkl
+*.joblib
+models/
+
+# Documentation build
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Redis dump
+dump.rdb
+
+# MinIO data
+minio-data/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Secrets and certificates
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+
+# Backup files
+*.backup
+*.bak
+
+# Generated files
+generated/
+auto-generated/
+
+# Cursor memory bank (separate repository)
+cursor-memory-bank/ 
