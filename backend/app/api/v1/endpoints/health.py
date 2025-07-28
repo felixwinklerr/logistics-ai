@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from loguru import logger
-import aioredis
+import redis.asyncio as redis
 import httpx
 
 from app.core.database import get_db
@@ -32,9 +32,9 @@ async def check_database() -> ServiceStatus:
 async def check_redis() -> ServiceStatus:
     """Check Redis connectivity"""
     try:
-        redis = aioredis.from_url(settings.redis_url)
-        await redis.ping()
-        await redis.close()
+        redis_client = redis.from_url(settings.redis_url)
+        await redis_client.ping()
+        await redis_client.close()
         return ServiceStatus(name="redis", status="healthy", message="Connected")
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")

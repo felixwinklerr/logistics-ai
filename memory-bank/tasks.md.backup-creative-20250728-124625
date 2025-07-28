@@ -1,0 +1,379 @@
+# Romanian Freight Forwarder Automation System
+## Current Task: 🚀 **PHASE 2: CORE BUSINESS LOGIC IMPLEMENTATION**
+
+**Task ID**: SYSTEM-IMPLEMENT-002  
+**Complexity Level**: Level 4 (Complex System)  
+**Task Type**: Core Business Logic Development & System Integration  
+**Priority**: Critical (Primary Business Value)  
+**Status**: **READY FOR IMPLEMENTATION** ✅
+
+---
+
+## 🎯 **COMPREHENSIVE DEVELOPMENT PLAN**
+
+### **Planning Context**
+- **Previous Phase**: QA Assessment & Enterprise Document Processing validated ✅
+- **Current Foundation**: Infrastructure operational, 49 API routes, JWT auth, multi-provider AI
+- **Business Focus**: Romanian freight forwarding core workflows
+- **Technical Focus**: Frontend-backend integration, business logic, UX optimization
+
+---
+
+## 📋 **REQUIREMENTS ANALYSIS**
+
+### **Primary Business Requirements**
+1. **Order Management Workflow**
+   - Order creation from parsed documents
+   - Order lifecycle management (draft → confirmed → in-transit → delivered → invoiced)
+   - Romanian business rules (VAT validation, address formatting, pricing)
+   - Integration with existing AI document processing
+
+2. **Frontend User Experience**
+   - Responsive order management interface
+   - Real-time order status updates
+   - Document upload and processing workflow
+   - Romanian localization support
+
+3. **System Integration & Optimization**
+   - Fix AI endpoint routing (double-prefix issue)
+   - Frontend React Fast Refresh optimization
+   - End-to-end workflow validation
+   - Performance optimization
+
+### **Technical Requirements**
+- **Database**: Order and subcontractor model integration
+- **API**: REST endpoints for order CRUD operations
+- **Real-time**: WebSocket/SSE for status updates
+- **Validation**: Romanian business rule validation
+- **File Handling**: Document upload and processing pipeline
+- **Authentication**: Role-based access control
+
+---
+
+## 🏗️ **COMPONENTS AFFECTED**
+
+### **Backend Components**
+- **Models**: `orders.py`, `subcontractors.py` - Schema refinement and relationships
+- **APIs**: `/api/v1/orders/*` - Full CRUD implementation  
+- **Services**: `order_service.py` - Core business logic
+- **Routing**: `ai.py` - Fix double-prefix routing issue
+- **Authentication**: Role-based permissions for order operations
+
+### **Frontend Components**
+- **Order Management**: `features/orders/*` - Complete workflow implementation
+- **Dashboard**: Real-time order status and metrics
+- **Forms**: Document upload and order creation forms
+- **Navigation**: Updated routing and sidebar
+- **Hooks**: `useAuth.tsx` - Fix Fast Refresh export issue
+
+### **Integration Points**
+- **AI Processing → Order Creation**: Seamless document-to-order workflow
+- **Frontend ↔ Backend**: API integration with real-time updates
+- **Authentication**: Consistent JWT handling across components
+- **File Storage**: Document management and processing pipeline
+
+---
+
+## 📊 **ARCHITECTURE CONSIDERATIONS**
+
+### **Business Logic Architecture**
+```
+Document Processing (Existing) → Order Creation (New) → Workflow Management (New)
+         ↓                              ↓                         ↓
+    AI Extraction              Romanian Validation        Status Tracking
+    Multi-Provider             Business Rules             Real-time Updates
+    Confidence Scoring         VAT/Address/Price         WebSocket/SSE
+```
+
+### **Frontend Architecture Pattern**
+```
+Feature-Based Organization:
+├── features/orders/
+│   ├── components/ (UI components)
+│   ├── hooks/ (business logic)
+│   ├── pages/ (route components)
+│   ├── services/ (API integration)
+│   └── types/ (TypeScript definitions)
+```
+
+### **Integration Architecture**
+- **API Layer**: Consistent error handling and response patterns
+- **State Management**: Zustand stores for order and UI state
+- **Real-time Layer**: WebSocket connection for live updates
+- **File Processing**: Unified upload/processing pipeline
+
+---
+
+## 📝 **IMPLEMENTATION STRATEGY**
+
+### **Phase 2A: Core Order Management** (Week 1)
+1. **Backend Order API** (Priority: High)
+   - Complete order CRUD operations
+   - Romanian business validation rules
+   - Order lifecycle state management
+   - Integration with existing AI processing
+
+2. **Frontend Order Interface** (Priority: High)
+   - Order list and detail views
+   - Order creation and editing forms
+   - Document upload integration
+   - Status tracking interface
+
+### **Phase 2B: System Integration & Optimization** (Week 2)
+1. **API Routing Optimization** (Priority: Medium)
+   - Fix AI endpoint double-prefix issue
+   - Standardize routing patterns
+   - API documentation updates
+
+2. **Frontend Polish & Performance** (Priority: Medium)
+   - Fix React Fast Refresh (useAuth.tsx export)
+   - Performance optimization
+   - Responsive design improvements
+   - Real-time updates implementation
+
+### **Phase 2C: Business Logic Completion** (Week 3)
+1. **Romanian Freight Forwarding Logic** (Priority: High)
+   - Subcontractor assignment workflow
+   - Pricing and margin calculation
+   - Document compliance validation
+   - Integration testing
+
+2. **End-to-End Workflow Validation** (Priority: Critical)
+   - Complete document-to-order pipeline
+   - User acceptance testing
+   - Performance validation
+   - Production readiness assessment
+
+---
+
+## 🔄 **DETAILED IMPLEMENTATION STEPS**
+
+### **Backend Development**
+1. **Order Service Enhancement**
+   - Implement business rule validation
+   - Add Romanian-specific logic (VAT, addresses, pricing)
+   - Create order lifecycle state machine
+   - Add real-time notification system
+
+2. **API Optimization**
+   - Fix `/api/v1/ai/ai/*` double-prefix routing
+   - Standardize error handling patterns
+   - Add API rate limiting and validation
+   - Update OpenAPI documentation
+
+3. **Database Integration**
+   - Ensure proper relationships between orders/documents/subcontractors
+   - Add indexes for performance
+   - Implement soft delete patterns
+   - Add audit logging
+
+### **Frontend Development**
+1. **Order Management Interface**
+   - Create comprehensive order list with filtering/sorting
+   - Implement order detail view with document preview
+   - Build order creation wizard with document upload
+   - Add real-time status updates
+
+2. **User Experience Optimization**
+   - Fix React Fast Refresh warning in `useAuth.tsx`
+   - Implement responsive design patterns
+   - Add loading states and error handling
+   - Create intuitive navigation flow
+
+3. **Integration Features**
+   - Real-time WebSocket integration for order updates
+   - Document processing status tracking
+   - Notification system for order events
+   - Romanian localization support
+
+---
+
+## 🔀 **DEPENDENCIES & INTEGRATION POINTS**
+
+### **Technical Dependencies**
+- **AI Document Processing**: Already operational ✅
+- **Authentication System**: JWT implementation working ✅
+- **Database Schema**: Orders/Subcontractors models exist ✅
+- **File Storage**: MinIO configured for document storage ✅
+
+### **Integration Challenges**
+1. **Frontend-Backend Coordination**: Ensure consistent API contracts
+2. **Real-time Updates**: WebSocket implementation for order status
+3. **File Processing**: Seamless document upload and AI processing
+4. **Romanian Validation**: Business rule implementation and testing
+
+### **Cross-Component Dependencies**
+- Order creation depends on AI document processing
+- Frontend routing needs backend API optimization
+- Real-time updates require WebSocket infrastructure
+- File uploads need integrated processing pipeline
+
+---
+
+## ⚠️ **CHALLENGES & MITIGATIONS**
+
+### **Technical Challenges**
+1. **API Routing Complexity**
+   - **Challenge**: Double-prefix routing in AI endpoints
+   - **Mitigation**: Systematic router configuration review and testing
+   - **Timeline**: 1-2 days for investigation and fix
+
+2. **Frontend State Management**
+   - **Challenge**: Complex order state with real-time updates
+   - **Mitigation**: Use Zustand with proper action patterns
+   - **Timeline**: 3-4 days for implementation and testing
+
+3. **Romanian Business Logic**
+   - **Challenge**: Complex freight forwarding rules and validation
+   - **Mitigation**: Iterative implementation with stakeholder feedback
+   - **Timeline**: 1 week for core logic, 3-5 days for refinement
+
+### **Integration Challenges**
+1. **Real-time Communication**
+   - **Challenge**: WebSocket integration for order updates
+   - **Mitigation**: Use proven patterns (Socket.IO or native WebSocket)
+   - **Timeline**: 2-3 days for implementation
+
+2. **File Processing Pipeline**
+   - **Challenge**: Seamless document upload and AI processing
+   - **Mitigation**: Build on existing AI processing foundation
+   - **Timeline**: 3-4 days for integration
+
+### **Business Challenges**
+1. **User Experience Flow**
+   - **Challenge**: Complex freight forwarding workflow
+   - **Mitigation**: User testing and iterative refinement
+   - **Timeline**: Ongoing throughout development
+
+---
+
+## 🎨 **CREATIVE PHASE COMPONENTS IDENTIFIED**
+
+### **UI/UX Design Requirements** ⭐ CREATIVE PHASE NEEDED
+- **Order Management Interface Design**: Dashboard layout, workflow optimization
+- **Romanian Localization UX**: Cultural and linguistic considerations
+- **Real-time Status Visualization**: Progress indicators and notification patterns
+- **Mobile-Responsive Design**: Tablet and mobile optimization
+
+### **Architecture Design Requirements** ⭐ CREATIVE PHASE NEEDED  
+- **Real-time Communication Pattern**: WebSocket vs SSE vs polling strategy
+- **State Management Architecture**: Order state complexity and real-time sync
+- **Error Handling Strategy**: User-friendly error management across workflow
+
+### **Business Logic Design Requirements** ⭐ CREATIVE PHASE NEEDED
+- **Romanian Freight Forwarding Workflow**: Business rule implementation strategy
+- **Subcontractor Assignment Algorithm**: Optimal matching and assignment logic
+- **Pricing and Margin Calculation**: Complex calculation engine design
+
+---
+
+## 📊 **SUCCESS CRITERIA & VALIDATION**
+
+### **Functional Requirements**
+- [ ] Order CRUD operations fully functional
+- [ ] AI document processing → Order creation workflow working
+- [ ] Romanian business validation implemented
+- [ ] Real-time order status updates operational
+- [ ] Frontend-backend integration complete
+
+### **Technical Requirements** 
+- [ ] API routing issues resolved (no double-prefix)
+- [ ] React Fast Refresh warnings eliminated
+- [ ] Performance benchmarks met (< 2s page load)
+- [ ] All tests passing (unit, integration, e2e)
+- [ ] OpenAPI documentation updated
+
+### **Business Requirements**
+- [ ] Complete order lifecycle supported
+- [ ] Romanian freight forwarding rules implemented
+- [ ] User acceptance criteria satisfied
+- [ ] Production deployment readiness confirmed
+- [ ] Security audit passed
+
+---
+
+## 🔄 **MODE TRANSITION STRATEGY**
+
+### **Next Mode Recommendation: CREATIVE** 🎨
+**Reasoning**: Three significant creative design challenges identified:
+1. **UI/UX Design**: Order management interface and Romanian localization
+2. **Architecture Design**: Real-time communication and state management  
+3. **Business Logic Design**: Romanian freight forwarding workflow patterns
+
+**Creative Phase Scope**:
+- Order management interface design decisions
+- Real-time communication architecture selection
+- Romanian business workflow optimization
+- Mobile-responsive design strategy
+
+### **Alternative: IMPLEMENT** 🔧
+**If Creative Phase Skipped**: Proceed directly to implementation with standard patterns
+**Risk**: Sub-optimal user experience and architectural decisions
+**Mitigation**: Iterative refinement during implementation
+
+---
+
+## 📈 **PROJECT IMPACT ASSESSMENT**
+
+### **Business Value Expected**
+- **Primary**: Complete order management capability for Romanian freight forwarding
+- **Secondary**: Optimized user experience and system performance
+- **Strategic**: Foundation for advanced features (subcontractor automation, profit optimization)
+
+### **Technical Debt Resolution**
+- AI endpoint routing standardization
+- Frontend development experience improvements
+- End-to-end integration validation
+- Production deployment readiness
+
+### **Development Acceleration**
+- Validated infrastructure foundation
+- Proven AI processing capabilities
+- Clear implementation roadmap
+- Comprehensive testing strategy
+
+---
+
+## 📚 **DOCUMENTATION & KNOWLEDGE REQUIREMENTS**
+
+### **Technical Documentation**
+- API endpoint documentation updates
+- Frontend component library expansion
+- Romanian business rule specification
+- Integration testing procedures
+
+### **Business Documentation**
+- Order workflow user guide
+- Romanian freight forwarding process documentation
+- System administration guide
+- Troubleshooting and support procedures
+
+---
+
+## ✅ **PLANNING COMPLETION CHECKLIST**
+
+- [x] **Requirements Analysis**: Comprehensive business and technical requirements defined
+- [x] **Component Analysis**: All affected backend and frontend components identified  
+- [x] **Architecture Review**: Integration points and patterns documented
+- [x] **Implementation Strategy**: Phased approach with detailed timeline
+- [x] **Dependency Mapping**: Technical and business dependencies identified
+- [x] **Challenge Assessment**: Risks identified with mitigation strategies
+- [x] **Creative Identification**: Three creative phase components identified
+- [x] **Success Criteria**: Functional, technical, and business validation defined
+
+---
+
+## �� **IMMEDIATE NEXT ACTIONS**
+
+1. **🎨 CREATIVE MODE**: Design order management interface and real-time architecture (Recommended)
+2. **🔧 IMPLEMENT MODE**: Begin implementation with standard patterns (Alternative)
+3. **📋 CONTINUED PLANNING**: Additional detailed planning for specific components
+
+---
+
+**📋 LEVEL 4 PLANNING COMPLETE** ✅  
+**🎯 BUSINESS IMPACT**: High-value order management capability development  
+**🔧 TECHNICAL FOUNDATION**: Solid infrastructure with clear optimization path  
+**📈 DEVELOPMENT READINESS**: Comprehensive roadmap with 3-week timeline  
+
+**🚀 RECOMMENDATION**: Proceed to **CREATIVE MODE** for optimal system design decisions

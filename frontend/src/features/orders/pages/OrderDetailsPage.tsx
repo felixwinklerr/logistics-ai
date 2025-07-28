@@ -8,7 +8,7 @@ import { OrderDetails } from '../components/OrderDetails';
 import { Order } from '../types';
 
 export const OrderDetailsPage: React.FC = () => {
-  const { orderId } = useParams<{ orderId: string }>();
+  const { id: orderId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: order, isLoading, error } = useOrder(orderId || '');
   const { updateStatus } = useOrderActions();

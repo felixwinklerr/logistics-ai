@@ -22,7 +22,6 @@ from app.services.ai_provider_manager import AIProviderManager
 from app.services.pdf_processor import PDFProcessor
 from app.core.database import AsyncSessionLocal
 from app.repositories.order_repository import OrderRepository
-from app.repositories.document_repository import DocumentRepository
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)

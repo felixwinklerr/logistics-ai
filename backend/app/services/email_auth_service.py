@@ -10,7 +10,7 @@ import asyncio
 from typing import Dict, Optional, Any, List
 from datetime import datetime, timedelta
 
-import aioredis
+import redis.asyncio as redis
 import httpx
 from loguru import logger
 
@@ -213,7 +213,7 @@ class EmailClient:
 class EmailAuthService:
     """OAuth2 authentication management for email providers"""
     
-    def __init__(self, redis_client: aioredis.Redis):
+    def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
         self.token_cache_ttl = 3300  # 55 minutes (tokens expire at 60)
         self.settings = get_settings()

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/shared/components/ui'
 import { useAuth } from '@/shared/hooks/useAuth'
 import { Truck, User, LogOut, Menu } from 'lucide-react'
@@ -10,6 +10,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   const location = useLocation()
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
 
   const navigation = [
@@ -20,6 +21,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
 
   const isActive = (path: string) => {
     return location.pathname.startsWith(path)
+  }
+
+  const handleSignIn = () => {
+    navigate('/login')
   }
 
   return (
@@ -81,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
               </div>
             </div>
           ) : (
-            <Button size="sm">
+            <Button size="sm" onClick={handleSignIn}>
               Sign In
             </Button>
           )}

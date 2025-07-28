@@ -1,11 +1,12 @@
 """
-Order API Endpoints - REST API for Order Management
+Order API Endpoints - Enhanced with Romanian Business Logic
 
 Provides comprehensive REST API for order operations including:
-- Full CRUD operations with validation
-- Status workflow management
+- Romanian business rule validation and VAT calculations
+- Workflow-centric order lifecycle management
+- AI integration with confidence-based processing
+- Real-time collaboration and status updates
 - Geographic operations and spatial queries
-- AI integration for document processing
 - Subcontractor assignment with profit calculations
 """
 
@@ -22,12 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.core.exceptions import ValidationError, NotFoundError, BusinessRuleError
-from app.models.orders import OrderStatus
+from app.models.orders import OrderStatus, RomanianWorkflowState
 from app.schemas.orders import (
     OrderCreateRequest, OrderUpdateRequest, OrderResponse, OrderDetailResponse,
     OrderListResponse, OrderStatusUpdateRequest
 )
 from app.services.order_service import create_order_service
+from app.services.order_service_enhanced import create_enhanced_order_service
+from app.services.order.romanian_business_logic import create_romanian_business_engine
 from app.services.geographic_service import Coordinates, SpatialQuery
 from app.repositories.order_repository import OrderFilterCriteria, SpatialSearchCriteria
 
@@ -35,86 +38,71 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-# CRUD Operations
+# Romanian Business Logic Integration
 
 @router.post(
-    "/",
+    "/romanian",
     response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create new order",
-    description="Create a new order with automatic geographic validation and UIT generation"
+    summary="Create order with Romanian business validation",
+    description="Create a new order with Romanian business rules, VAT calculations, and workflow management"
 )
-async def create_order(
+async def create_order_romanian(
     order_data: OrderCreateRequest,
+    user_id: str = Query(..., description="User ID creating the order"),
     db: AsyncSession = Depends(get_db)
 ) -> OrderResponse:
     """
-    Create a new order with comprehensive validation:
+    Create order with comprehensive Romanian business logic validation.
     
-    - Validates and geocodes pickup/delivery addresses
-    - Generates unique UIT code for public access
-    - Stores geographic coordinates for spatial queries
-    - Applies business rules validation
+    Features:
+    - Romanian VAT number validation and calculation
+    - Address format validation for Romanian addresses
+    - Workflow-centric state management
+    - AI confidence-based processing routing
+    - Pricing calculation with Romanian tax rules
     """
     try:
-        order_service = await create_order_service(db)
-        order = await order_service.create_order(order_data)
+        logger.info(f"Creating Romanian order for user {user_id}")
+        
+        # Create enhanced order service with Romanian integration
+        enhanced_service = await create_enhanced_order_service(db)
+        
+        # Create order with Romanian validation
+        result = await enhanced_service.create_order_with_romanian_validation(
+            order_data, user_id
+        )
+        
+        if not result["success"]:
+            logger.warning(f"Romanian order creation failed: {result['errors']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "message": "Romanian business validation failed",
+                    "errors": result["errors"],
+                    "warnings": result.get("warnings", [])
+                }
+            )
+        
+        logger.info(f"Romanian order created successfully: {result['order'].order_id}")
         
         return OrderResponse(
-            order_id=str(order.order_id),
-            client_company_name=order.client_company_name,
-            client_vat_number=order.client_vat_number,
-            client_contact_email=order.client_contact_email,
-            client_offered_price=order.client_offered_price,
-            client_payment_terms=order.client_payment_terms,
-            
-            pickup_address=order.pickup_address,
-            pickup_city=order.pickup_city,
-            pickup_postcode=order.pickup_postcode,
-            pickup_country=order.pickup_country,
-            pickup_date_start=order.pickup_date_start,
-            pickup_date_end=order.pickup_date_end,
-            
-            delivery_address=order.delivery_address,
-            delivery_city=order.delivery_city,
-            delivery_postcode=order.delivery_postcode,
-            delivery_country=order.delivery_country,
-            delivery_date_start=order.delivery_date_start,
-            delivery_date_end=order.delivery_date_end,
-            
-            cargo_ldm=order.cargo_ldm,
-            cargo_weight_kg=order.cargo_weight_kg,
-            cargo_pallets=order.cargo_pallets,
-            cargo_description=order.cargo_description,
-            special_requirements=order.special_requirements,
-            
-            order_status=order.order_status,
-            uit_code=order.uit_code,
-            subcontractor_id=str(order.subcontractor_id) if order.subcontractor_id else None,
-            subcontractor_price=order.subcontractor_price,
-            profit_margin=order.profit_margin,
-            profit_percentage=order.profit_percentage,
-            
-            extraction_confidence=order.extraction_confidence,
-            manual_review_required=order.manual_review_required,
-            notes=order.notes,
-            
-            created_at=order.created_at,
-            updated_at=order.updated_at
+            order_id=result["order"].order_id,
+            status=result["order"].workflow_state.value,
+            **result["order"].__dict__
         )
         
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Validation failed: {str(e)}"
-        )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Order creation failed: {e}")
+        logger.error(f"Failed to create Romanian order: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during order creation"
+            detail="Failed to create order with Romanian business logic"
         )
 
+
+# CRUD Operations
 
 @router.get(
     "/",
@@ -202,11 +190,20 @@ async def get_orders(
                 updated_at=order.updated_at
             ))
         
+        # Calculate pagination
+        page = (skip // limit) + 1 if limit > 0 else 1
+        total_pages = ((len(order_responses) - 1) // limit) + 1 if limit > 0 else 1
+        has_next = skip + limit < len(order_responses)
+        has_previous = skip > 0
+        
         return OrderListResponse(
             orders=order_responses,
             total_count=len(order_responses),  # Simplified for MVP
-            skip=skip,
-            limit=limit
+            page=page,
+            page_size=limit,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_previous=has_previous
         )
         
     except Exception as e:
@@ -667,6 +664,56 @@ async def get_order_by_uit(
         )
 
 
+@router.post(
+    "/",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create new order (legacy)",
+    description="Create a new order with basic validation - use /romanian endpoint for Romanian business logic",
+    deprecated=True
+)
+async def create_order(
+    order_data: OrderCreateRequest,
+    db: AsyncSession = Depends(get_db)
+) -> OrderResponse:
+    """
+    Create order with basic validation (legacy endpoint).
+    
+    Note: This endpoint is deprecated. Use POST /orders/romanian for:
+    - Romanian business rule validation
+    - VAT calculations
+    - Workflow-centric management
+    - Enhanced AI processing
+    """
+    try:
+        logger.info("Creating order with legacy endpoint")
+        logger.warning("Legacy endpoint used - recommend /orders/romanian for enhanced features")
+        
+        order_service = await create_order_service(db)
+        
+        # Basic order creation without Romanian enhancements
+        order = await order_service.create_order(order_data)
+        
+        return OrderResponse(
+            order_id=order.order_id,
+            status=order.status.value,
+            **order.__dict__
+        )
+        
+    except ValidationError as e:
+        logger.warning(f"Order validation failed: {e.message}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.message
+        )
+    except Exception as e:
+        logger.error(f"Failed to create order: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create order"
+        )
+
+
 @router.get("/status/summary")
 async def get_order_status_summary():
     """
@@ -687,3 +734,232 @@ async def get_order_status_summary():
         ],
         "current_status": "Sprint 3 implementation complete"
     } 
+
+# Workflow Management Endpoints
+
+@router.patch(
+    "/{order_id}/workflow",
+    response_model=OrderResponse,
+    summary="Update order workflow state",
+    description="Update order workflow state using Romanian business rules"
+)
+async def update_order_workflow(
+    order_id: str,
+    context: Optional[Dict[str, Any]] = Body(None, description="Context data for state transition"),
+    db: AsyncSession = Depends(get_db)
+) -> OrderResponse:
+    """
+    Update order workflow state based on Romanian business rules.
+    
+    The system automatically determines the next appropriate state based on:
+    - Current workflow state
+    - AI confidence scores (0.85 threshold)
+    - Romanian business rules
+    - EU cross-border requirements
+    """
+    try:
+        logger.info(f"Updating workflow for order {order_id}")
+        
+        enhanced_service = await create_enhanced_order_service(db)
+        
+        result = await enhanced_service.update_order_workflow_state(
+            order_id, context or {}
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=result["error"]
+            )
+        
+        logger.info(f"Workflow updated: {result['previous_state']} → {result['new_state']}")
+        
+        return OrderResponse(
+            order_id=result["order"].order_id,
+            status=result["order"].workflow_state.value,
+            **result["order"].__dict__
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update workflow: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update order workflow"
+        )
+
+
+@router.get(
+    "/{order_id}/romanian-context",
+    summary="Get order with Romanian business context",
+    description="Retrieve order with Romanian validation status, pricing, and workflow information"
+)
+async def get_order_romanian_context(
+    order_id: str,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get order with comprehensive Romanian business context.
+    
+    Returns:
+    - Order details
+    - Romanian validation status
+    - VAT calculation breakdown
+    - Workflow state and next actions
+    - Business rules compliance status
+    """
+    try:
+        logger.info(f"Retrieving Romanian context for order {order_id}")
+        
+        enhanced_service = await create_enhanced_order_service(db)
+        
+        result = await enhanced_service.get_order_with_romanian_context(order_id)
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=result["error"]
+            )
+        
+        return {
+            "order": result["order"],
+            "romanian_context": result["romanian_context"],
+            "success": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get Romanian context: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve order Romanian context"
+        )
+
+
+@router.get(
+    "/workflow/{workflow_state}",
+    response_model=List[OrderResponse],
+    summary="List orders by workflow state",
+    description="Get orders filtered by Romanian workflow state"
+)
+async def list_orders_by_workflow(
+    workflow_state: RomanianWorkflowState,
+    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    skip: int = Query(0, ge=0, description="Number of orders to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Number of orders to return"),
+    db: AsyncSession = Depends(get_db)
+) -> List[OrderResponse]:
+    """
+    List orders filtered by Romanian workflow state.
+    
+    Workflow states:
+    - draft: Order creation started
+    - document_uploaded: Transport documents uploaded
+    - ai_processing: AI extracting order details
+    - validation_required: Manual review needed
+    - validated: Order details confirmed
+    - pricing_calculated: Romanian VAT calculated
+    - confirmed: Order ready for execution
+    - subcontractor_assigned: Subcontractor selected
+    - in_transit: Shipment in progress
+    - customs_clearance: EU border processing
+    - delivered: Shipment completed
+    - invoiced: Invoice generated
+    - paid: Payment received
+    - completed: Order finalized
+    - cancelled: Order cancelled
+    """
+    try:
+        logger.info(f"Listing orders with workflow state: {workflow_state.value}")
+        
+        enhanced_service = await create_enhanced_order_service(db)
+        
+        result = await enhanced_service.list_orders_with_workflow_filter(
+            user_id=user_id or "",
+            workflow_states=[workflow_state.value],
+            skip=skip,
+            limit=limit
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve orders"
+            )
+        
+        orders = []
+        for order_data in result["orders"]:
+            order = order_data["order"]
+            orders.append(OrderResponse(
+                order_id=order.order_id,
+                status=order.workflow_state.value,
+                **order.__dict__
+            ))
+        
+        return orders
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list orders by workflow: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list orders by workflow state"
+        )
+
+
+# Romanian Validation Endpoints
+
+@router.post(
+    "/validate/romanian",
+    summary="Validate Romanian business data",
+    description="Validate order data against Romanian business rules without creating an order"
+)
+async def validate_romanian_data(
+    order_data: OrderCreateRequest,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Validate order data against Romanian business rules.
+    
+    Checks:
+    - VAT number format (RO + 2-10 digits)
+    - Address format validation
+    - County (județ) code validation
+    - Postal code format (6 digits)
+    - Business rule compliance
+    
+    Returns validation results without creating an order.
+    """
+    try:
+        logger.info("Validating Romanian business data")
+        
+        # Create Romanian business engine for validation
+        from app.services.order.romanian_business_logic import create_romanian_business_engine
+        romanian_engine = create_romanian_business_engine()
+        
+        # Convert order data to dict for validation
+        order_dict = order_data.dict()
+        
+        # Validate against Romanian business rules
+        validation_result = romanian_engine.validate_order_data(order_dict)
+        
+        # Calculate pricing if validation passes
+        pricing_result = None
+        if validation_result["is_valid"]:
+            pricing_result = romanian_engine.calculate_order_pricing(order_dict)
+        
+        return {
+            "validation": validation_result,
+            "pricing": pricing_result,
+            "success": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Romanian validation failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate Romanian business data"
+        ) 

@@ -27,7 +27,7 @@ class OrderStatus(str, Enum):
 class OrderBase(BaseModel):
     """Base order schema"""
     client_company_name: str = Field(..., description="Client company name")
-    client_vat_number: str = Field(..., description="Client VAT number")
+    client_vat_number: Optional[str] = Field(None, description="Client VAT number")
     client_contact_email: Optional[str] = Field(None, description="Client contact email")
     client_offered_price: Decimal = Field(..., description="Price offered by client (EUR)")
     

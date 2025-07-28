@@ -8,13 +8,15 @@ from geoalchemy2 import Geography
 from app.core.config import settings
 
 
-# Database engine
+# Database engine with psycopg driver
 engine = create_async_engine(
     settings.get_database_url,
     echo=settings.debug,
     future=True,
     pool_pre_ping=True,
     pool_recycle=300,
+    # psycopg-specific configuration
+    connect_args={"timeout": 30},
 )
 
 # Session factory

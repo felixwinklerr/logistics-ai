@@ -1,10 +1,16 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import { PageLayout } from '@/shared/components/layout/PageLayout';
 import { Package, Truck, Euro, Clock } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+
+  const handleCreateOrder = () => {
+    navigate('/orders/new');
+  };
+
   const metrics = [
     {
       title: 'Total Orders',
@@ -41,7 +47,7 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <PageLayout>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
@@ -50,7 +56,7 @@ export const DashboardPage: React.FC = () => {
               Overview of your freight forwarding operations
             </p>
           </div>
-          <Button>
+          <Button onClick={handleCreateOrder}>
             Create New Order
           </Button>
         </div>
@@ -160,6 +166,6 @@ export const DashboardPage: React.FC = () => {
           </Card>
         </div>
       </div>
-    </PageLayout>
+    </div>
   );
 }; 

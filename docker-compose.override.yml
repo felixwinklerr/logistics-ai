@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.fix
+    environment:
+      - NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0
+      - DATABASE_URL=postgresql+asyncpg://logistics:password@postgres:5432/logistics_db
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.fix
+    environment:
+      - NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0
+      - DATABASE_URL=postgresql+asyncpg://logistics:password@postgres:5432/logistics_db
+    command: celery -A app.tasks worker --loglevel=info
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev.fix
+    environment:
+      - NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0
+      - DATABASE_URL=postgresql+asyncpg://logistics:password@postgres:5432/logistics_db
+    command: celery -A app.tasks beat --loglevel=info 

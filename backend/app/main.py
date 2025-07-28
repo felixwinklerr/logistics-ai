@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
@@ -17,6 +16,7 @@ from app.middleware.exception_handler import (
     http_exception_handler,
     validation_exception_handler
 )
+from app.middleware.security import setup_security_middleware, AuthRateLimitMiddleware
 
 
 # Configure logging
@@ -37,48 +37,82 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await init_db()
         logger.info("✅ Database initialized successfully")
         
+        # Initialize WebSocket manager
+        from app.services.websocket_manager import websocket_manager
+        await websocket_manager.initialize()
+        logger.info("✅ WebSocket manager initialized")
+        
+        # Initialize cache service
+        from app.services.cache_service import cache_service
+        await cache_service.initialize()
+        logger.info("✅ Cache service initialized")
+        
         yield
         
     finally:
         # Shutdown
         logger.info("🛑 Shutting down application")
+        
+        # Cleanup WebSocket connections
+        from app.services.websocket_manager import websocket_manager
+        await websocket_manager.cleanup()
+        logger.info("✅ WebSocket connections cleaned up")
+        
+        # Close cache service
+        from app.services.cache_service import cache_service
+        await cache_service.close()
+        logger.info("✅ Cache service closed")
+        
         await close_db()
         logger.info("✅ Database connections closed")
 
 
 # Create FastAPI application
 app = FastAPI(
-    title=settings.app_name,
-    version=settings.version,
-    description="AI-powered logistics automation platform for Romanian freight forwarders",
-    openapi_url=f"{settings.api_v1_prefix}/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    title="Romanian Freight Forwarder Automation API",
+    description="Enterprise-grade freight forwarding automation with Romanian business logic",
+    version="2.0.0",
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
     lifespan=lifespan
 )
 
-# Add middleware
+# Include API routes
+app.include_router(api_router, prefix="/api/v1")
+
+# Include WebSocket routes
+from app.api.v1.websockets import websocket_router
+app.include_router(websocket_router)
+
+# Setup middleware
+setup_security_middleware(app)
+
+# CORS configuration for WebSocket and API access
+from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # Frontend dev servers
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=settings.allowed_hosts
-)
+# Rate limiting middleware
+app.add_middleware(AuthRateLimitMiddleware)
 
-# Add custom exception handling middleware
+# Exception handling middleware
 app.add_middleware(ExceptionHandlerMiddleware)
 
-# Add exception handlers
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+# Trusted host middleware
+if not settings.debug:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.allowed_hosts
+    )
 
-# Include API routes
-app.include_router(api_router, prefix=settings.api_v1_prefix)
+# Exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(422, http_exception_handler)
 
 
 @app.get("/")

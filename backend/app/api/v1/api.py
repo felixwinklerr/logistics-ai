@@ -1,13 +1,13 @@
-"""API v1 router configuration"""
+"""Main API router configuration"""
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, orders
-from app.api.v1 import ai, subcontractors
+from app.api.v1.endpoints import auth, health, orders
+from app.api.v1.endpoints.monitoring import monitoring_router
 
 api_router = APIRouter()
 
-# Include endpoint routers
-api_router.include_router(health.router, prefix="/health", tags=["health"])
-api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
-api_router.include_router(subcontractors.router, prefix="/subcontractors", tags=["subcontractors"])
-api_router.include_router(ai.router, prefix="/ai", tags=["AI Document Processing"]) 
+# Include all endpoint routers
+api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(health.router, prefix="/health", tags=["Health"])
+api_router.include_router(orders.router, prefix="/orders", tags=["Orders"])
+api_router.include_router(monitoring_router, tags=["System Monitoring"])

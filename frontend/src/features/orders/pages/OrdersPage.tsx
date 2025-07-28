@@ -1,8 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OrderList } from '@/features/orders/components/OrderList';
-import { useOrders, useExportOrders } from '@/features/orders/hooks/useOrders';
+import { useOrders, useExportOrders, useAssignSubcontractor } from '@/features/orders/hooks/useOrders';
 import { OrderStatus, OrderListResponse } from '@/features/orders/types';
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { useToast } from '@/shared/hooks/useToast';
 
 interface OrderFilters {
   searchTerm: string;
@@ -12,9 +21,113 @@ interface OrderFilters {
   urgentOnly: boolean;
 }
 
+interface AssignmentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  orderId: string | null;
+  onAssign: (assignment: any) => void;
+}
+
+const AssignmentModal: React.FC<AssignmentModalProps> = ({ isOpen, onClose, orderId, onAssign }) => {
+  const [assignment, setAssignment] = useState({
+    subcontractor_id: '',
+    agreed_price: '',
+    payment_terms: '30',
+    special_instructions: ''
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignment.subcontractor_id || !assignment.agreed_price) {
+      return;
+    }
+    
+    onAssign({
+      subcontractor_id: assignment.subcontractor_id,
+      agreed_price: parseFloat(assignment.agreed_price),
+      payment_terms: assignment.payment_terms,
+      special_instructions: assignment.special_instructions || undefined
+    });
+    
+    // Reset form
+    setAssignment({
+      subcontractor_id: '',
+      agreed_price: '',
+      payment_terms: '30',
+      special_instructions: ''
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Assign Subcontractor</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Subcontractor ID</label>
+            <Input
+              type="text"
+              value={assignment.subcontractor_id}
+              onChange={(e) => setAssignment(prev => ({ ...prev, subcontractor_id: e.target.value }))}
+              placeholder="Enter subcontractor ID"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Agreed Price (EUR)</label>
+            <Input
+              type="number"
+              step="0.01"
+              value={assignment.agreed_price}
+              onChange={(e) => setAssignment(prev => ({ ...prev, agreed_price: e.target.value }))}
+              placeholder="Enter agreed price"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Payment Terms (days)</label>
+            <Input
+              type="number"
+              value={assignment.payment_terms}
+              onChange={(e) => setAssignment(prev => ({ ...prev, payment_terms: e.target.value }))}
+              placeholder="Payment terms in days"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Special Instructions</label>
+            <textarea
+              className="w-full px-3 py-2 border border-slate-300 rounded-md resize-none"
+              rows={3}
+              value={assignment.special_instructions}
+              onChange={(e) => setAssignment(prev => ({ ...prev, special_instructions: e.target.value }))}
+              placeholder="Optional special instructions"
+            />
+          </div>
+          
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Assign Subcontractor
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export const OrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const exportOrdersMutation = useExportOrders();
+  const assignSubcontractorMutation = useAssignSubcontractor();
+  const { toast } = useToast();
 
   // State for pagination and filters
   const [currentPage, setCurrentPage] = useState(1);
@@ -25,6 +138,15 @@ export const OrdersPage: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     urgentOnly: false
+  });
+
+  // Assignment modal state
+  const [assignmentModal, setAssignmentModal] = useState<{
+    isOpen: boolean;
+    orderId: string | null;
+  }>({
+    isOpen: false,
+    orderId: null
   });
 
   // Build query parameters for API
@@ -56,12 +178,39 @@ export const OrdersPage: React.FC = () => {
     navigate('/orders/new');
   }, [navigate]);
 
-  // Handle subcontractor assignment
+  // Handle subcontractor assignment - open modal instead of navigation
   const handleAssignSubcontractor = useCallback((orderId: string) => {
-    // TODO: Open subcontractor assignment modal/page
-    console.log('Assign subcontractor to order:', orderId);
-    navigate(`/orders/${orderId}/assign`);
-  }, [navigate]);
+    setAssignmentModal({
+      isOpen: true,
+      orderId: orderId
+    });
+  }, []);
+
+  // Handle assignment submission
+  const handleAssignmentSubmit = useCallback((assignment: any) => {
+    if (!assignmentModal.orderId) return;
+
+    assignSubcontractorMutation.mutate({
+      orderId: assignmentModal.orderId,
+      assignment
+    }, {
+      onSuccess: () => {
+        setAssignmentModal({ isOpen: false, orderId: null });
+        toast({
+          title: 'Subcontractor Assigned',
+          description: 'The subcontractor has been successfully assigned to the order.',
+          variant: 'default',
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: 'Assignment Failed',
+          description: error.message || 'Failed to assign subcontractor. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    });
+  }, [assignmentModal.orderId, assignSubcontractorMutation, toast]);
 
   // Handle filter changes
   const handleFiltersChange = useCallback((newFilters: Partial<OrderFilters>) => {
@@ -122,6 +271,13 @@ export const OrdersPage: React.FC = () => {
         onPageChange={handlePageChange}
         onFiltersChange={handleFiltersChange}
         onExport={handleExport}
+      />
+      
+      <AssignmentModal
+        isOpen={assignmentModal.isOpen}
+        onClose={() => setAssignmentModal({ isOpen: false, orderId: null })}
+        orderId={assignmentModal.orderId}
+        onAssign={handleAssignmentSubmit}
       />
     </div>
   );

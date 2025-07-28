@@ -1,747 +1,766 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import {
-  Building,
-  MapPin,
-  Package,
-  ChevronLeft,
-  ChevronRight,
-  Save,
-  X,
-  AlertCircle,
-  CheckCircle
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+/**
+ * Enhanced Order Form Component
+ * Implements workflow-centric design with Romanian business logic integration
+ */
+
+import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
+import { Badge } from '@/shared/components/ui/badge';
+import { WorkflowProgress, WorkflowStage } from './workflow/WorkflowProgress';
+import { useOrderRealtime } from '../hooks/realtime/useOrderRealtime';
 import { 
-  OrderCreateRequest, 
-  OrderUpdateRequest,
-  Order 
-} from '@/features/orders/types';
+  romanianLocalization, 
+  validateRomanianVAT, 
+  validateRomanianPostalCode,
+  validateRomanianCounty,
+  formatRomanianCurrency,
+  getLocalizedText 
+} from '../services/romanian/localization';
 
-// Romanian business validation patterns
-export const VAT_REGEX = /^RO\d{2,10}$/;
-export const POSTCODE_REGEX = /^\d{6}$/;
-
-// Order form validation schema
-const orderSchema = z.object({
-  // Client Information - Step 1
-  client_company_name: z.string()
-    .min(2, 'Company name must be at least 2 characters')
-    .max(100, 'Company name must be less than 100 characters'),
-  client_vat_number: z.string()
-    .regex(VAT_REGEX, 'VAT number must be in format: RO followed by 2-10 digits'),
-  client_contact_email: z.string()
-    .email('Please enter a valid email address'),
-  client_offered_price: z.number()
-    .min(1, 'Price must be greater than 0')
-    .max(100000, 'Price cannot exceed €100,000'),
-  client_payment_terms: z.string()
-    .max(100, 'Payment terms must be less than 100 characters')
-    .optional(),
-
-  // Pickup Information - Step 2
-  pickup_address: z.string()
-    .min(5, 'Pickup address must be at least 5 characters')
-    .max(200, 'Address must be less than 200 characters'),
-  pickup_postcode: z.string()
-    .regex(POSTCODE_REGEX, 'Romanian postcode must be exactly 6 digits'),
-  pickup_city: z.string()
-    .min(2, 'City name must be at least 2 characters')
-    .max(50, 'City name must be less than 50 characters'),
-  pickup_country: z.string()
-    .length(2, 'Country code must be exactly 2 characters')
-    .default('RO'),
-  pickup_date_start: z.string()
-    .optional(),
-  pickup_date_end: z.string()
-    .optional(),
-
-  // Delivery Information - Step 3
-  delivery_address: z.string()
-    .min(5, 'Delivery address must be at least 5 characters')
-    .max(200, 'Address must be less than 200 characters'),
-  delivery_postcode: z.string()
-    .regex(POSTCODE_REGEX, 'Romanian postcode must be exactly 6 digits'),
-  delivery_city: z.string()
-    .min(2, 'City name must be at least 2 characters')
-    .max(50, 'City name must be less than 50 characters'),
-  delivery_country: z.string()
-    .length(2, 'Country code must be exactly 2 characters')
-    .default('RO'),
-  delivery_date_start: z.string()
-    .optional(),
-  delivery_date_end: z.string()
-    .optional(),
-
-  // Cargo Information - Step 4
-  cargo_ldm: z.number()
-    .min(0.1, 'LDM must be at least 0.1')
-    .max(33, 'LDM cannot exceed 33 meters')
-    .optional(),
-  cargo_weight_kg: z.number()
-    .min(1, 'Weight must be at least 1 kg')
-    .max(40000, 'Weight cannot exceed 40,000 kg')
-    .optional(),
-  cargo_pallets: z.number()
-    .min(1, 'Pallets must be at least 1')
-    .max(33, 'Pallets cannot exceed 33')
-    .optional(),
-  cargo_description: z.string()
-    .max(500, 'Description must be less than 500 characters')
-    .optional(),
-  special_requirements: z.string()
-    .max(500, 'Special requirements must be less than 500 characters')
-    .optional(),
-});
-
-type OrderFormData = z.infer<typeof orderSchema>;
-
-interface OrderFormProps {
-  order?: Order;
-  onSubmit: (data: OrderCreateRequest | OrderUpdateRequest) => Promise<void>;
-  onCancel: () => void;
-  isLoading?: boolean;
+interface OrderFormData {
+  // Company Information
+  companyName: string;
+  vatNumber: string;
+  registrationNumber: string;
+  
+  // Pickup Address
+  pickupStreet: string;
+  pickupNumber: string;
+  pickupCity: string;
+  pickupCounty: string;
+  pickupPostalCode: string;
+  
+  // Delivery Address
+  deliveryStreet: string;
+  deliveryNumber: string;
+  deliveryCity: string;
+  deliveryCounty: string;
+  deliveryPostalCode: string;
+  
+  // Cargo Information
+  description: string;
+  weight: number;
+  volume: number;
+  length: number;
+  width: number;
+  height: number;
+  
+  // Contact Information
+  contactPerson: string;
+  phone: string;
+  email: string;
 }
 
-export const OrderForm: React.FC<OrderFormProps> = ({ 
-  order, 
-  onSubmit, 
-  onCancel, 
-  isLoading = false 
-}) => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+interface OrderFormProps {
+  initialData?: Partial<OrderFormData>;
+  onSubmit?: (data: OrderFormData) => void;
+  onValidationChange?: (isValid: boolean) => void;
+  mode?: 'create' | 'edit';
+  orderId?: string;
+}
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isValid },
-    reset,
-  } = useForm<OrderFormData>({
-    resolver: zodResolver(orderSchema),
-    defaultValues: {
-      client_company_name: order?.client_company_name || '',
-      client_vat_number: order?.client_vat_number || '',
-      client_contact_email: order?.client_contact_email || '',
-      client_offered_price: order?.client_offered_price || 0,
-      client_payment_terms: order?.client_payment_terms || '',
-      pickup_address: order?.pickup_address || '',
-      pickup_postcode: order?.pickup_postcode || '',
-      pickup_city: order?.pickup_city || '',
-      pickup_country: order?.pickup_country || 'RO',
-      pickup_date_start: order?.pickup_date_start || '',
-      pickup_date_end: order?.pickup_date_end || '',
-      delivery_address: order?.delivery_address || '',
-      delivery_postcode: order?.delivery_postcode || '',
-      delivery_city: order?.delivery_city || '',
-      delivery_country: order?.delivery_country || 'RO',
-      delivery_date_start: order?.delivery_date_start || '',
-      delivery_date_end: order?.delivery_date_end || '',
-      cargo_ldm: order?.cargo_ldm || undefined,
-      cargo_weight_kg: order?.cargo_weight_kg || undefined,
-      cargo_pallets: order?.cargo_pallets || undefined,
-      cargo_description: order?.cargo_description || '',
-      special_requirements: order?.special_requirements || '',
-    },
-    mode: 'onChange'
+interface ValidationErrors {
+  [key: string]: string;
+}
+
+export const OrderForm: React.FC<OrderFormProps> = ({
+  initialData = {},
+  onSubmit,
+  onValidationChange,
+  mode = 'create',
+  orderId
+}) => {
+  const [formData, setFormData] = useState<OrderFormData>({
+    companyName: '',
+    vatNumber: '',
+    registrationNumber: '',
+    pickupStreet: '',
+    pickupNumber: '',
+    pickupCity: '',
+    pickupCounty: '',
+    pickupPostalCode: '',
+    deliveryStreet: '',
+    deliveryNumber: '',
+    deliveryCity: '',
+    deliveryCounty: '',
+    deliveryPostalCode: '',
+    description: '',
+    weight: 0,
+    volume: 0,
+    length: 0,
+    width: 0,
+    height: 0,
+    contactPerson: '',
+    phone: '',
+    email: '',
+    ...initialData
   });
 
-  const totalSteps = 4;
-  const isLastStep = currentStep === totalSteps;
-  const isFirstStep = currentStep === 1;
+  const [currentStep, setCurrentStep] = useState<'company' | 'addresses' | 'cargo' | 'contact' | 'review'>('company');
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  const [isValidating, setIsValidating] = useState(false);
+  const [romanianValidation, setRomanianValidation] = useState<any>(null);
+  const [currentWorkflowStage] = useState<WorkflowStage>('draft');
 
-  const handleNext = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+  // Real-time integration for collaborative editing
+  const {
+    isConnected,
+    activeUsers,
+    broadcastEditing,
+    stopEditing
+  } = useOrderRealtime({
+    orderId,
+    enableCollaboration: mode === 'edit'
+  });
+
+  // Form validation using Romanian business rules
+  const validateForm = useCallback(async () => {
+    const errors: ValidationErrors = {};
+
+    // Romanian VAT validation
+    if (formData.vatNumber && !validateRomanianVAT(formData.vatNumber)) {
+      errors.vatNumber = getLocalizedText('invalidVat', 'forms');
     }
-  };
 
-  const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    // Postal code validation
+    if (formData.pickupPostalCode && !validateRomanianPostalCode(formData.pickupPostalCode)) {
+      errors.pickupPostalCode = getLocalizedText('invalidPostalCode', 'forms');
     }
-  };
+    if (formData.deliveryPostalCode && !validateRomanianPostalCode(formData.deliveryPostalCode)) {
+      errors.deliveryPostalCode = getLocalizedText('invalidPostalCode', 'forms');
+    }
 
-  const onFormSubmit = async (data: OrderFormData) => {
+    // County validation
+    if (formData.pickupCounty && !validateRomanianCounty(formData.pickupCounty)) {
+      errors.pickupCounty = getLocalizedText('invalidCounty', 'forms');
+    }
+    if (formData.deliveryCounty && !validateRomanianCounty(formData.deliveryCounty)) {
+      errors.deliveryCounty = getLocalizedText('invalidCounty', 'forms');
+    }
+
+    // Required field validation
+    if (!formData.companyName) {
+      errors.companyName = getLocalizedText('required', 'forms');
+    }
+
+    setValidationErrors(errors);
+    const isValid = Object.keys(errors).length === 0;
+    onValidationChange?.(isValid);
+    
+    return isValid;
+  }, [formData, onValidationChange]);
+
+  // Handle field changes with real-time broadcasting
+  const handleFieldChange = useCallback((field: keyof OrderFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Broadcast editing status for collaboration
+    if (mode === 'edit' && isConnected) {
+      broadcastEditing(field);
+    }
+  }, [mode, isConnected, broadcastEditing]);
+
+  // Handle field blur (stop editing broadcast)
+  const handleFieldBlur = useCallback(() => {
+    if (mode === 'edit' && isConnected) {
+      stopEditing();
+    }
+  }, [mode, isConnected, stopEditing]);
+
+  // Validate Romanian business data
+  const validateRomanianData = useCallback(async () => {
+    if (!formData.vatNumber || Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    setIsValidating(true);
     try {
-      setSubmitError(null);
+      // This would call the Romanian validation API endpoint
+      const response = await fetch('/api/v1/orders/validate/romanian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
       
-      // Convert form data to API format
-      const submitData: OrderCreateRequest | OrderUpdateRequest = {
-        ...data,
-        // Ensure numeric fields are properly typed
-        client_offered_price: Number(data.client_offered_price),
-        cargo_ldm: data.cargo_ldm ? Number(data.cargo_ldm) : undefined,
-        cargo_weight_kg: data.cargo_weight_kg ? Number(data.cargo_weight_kg) : undefined,
-        cargo_pallets: data.cargo_pallets ? Number(data.cargo_pallets) : undefined,
-      };
-
-      await onSubmit(submitData);
-      reset(); // Reset form after successful submission
+      const result = await response.json();
+      setRomanianValidation(result);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving the order');
+      console.error('Romanian validation failed:', error);
+    } finally {
+      setIsValidating(false);
     }
-  };
+  }, [formData, validationErrors]);
 
-  const handleCancel = () => {
-    reset();
-    setCurrentStep(1);
-    setSubmitError(null);
-    onCancel();
-  };
-
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1:
-        return <ClientInfoStep register={register} errors={errors} />;
-      case 2:
-        return <PickupInfoStep register={register} errors={errors} />;
-      case 3:
-        return <DeliveryInfoStep register={register} errors={errors} />;
-      case 4:
-        return <CargoInfoStep register={register} errors={errors} />;
-      default:
-        return null;
+  // Progressive disclosure steps
+  const steps = [
+    {
+      id: 'company',
+      label: getLocalizedText('companyName', 'forms'),
+      description: 'Informații despre companie și cod TVA',
+      isComplete: formData.companyName && formData.vatNumber && !validationErrors.vatNumber
+    },
+    {
+      id: 'addresses',
+      label: 'Adrese Transport',
+      description: 'Puncte de ridicare și livrare',
+      isComplete: formData.pickupCity && formData.deliveryCity
+    },
+    {
+      id: 'cargo',
+      label: getLocalizedText('description', 'forms'),
+      description: 'Detalii despre marfă și dimensiuni',
+      isComplete: formData.description && formData.weight > 0
+    },
+    {
+      id: 'contact',
+      label: getLocalizedText('contactPerson', 'forms'),
+      description: 'Persoana de contact și comunicare',
+      isComplete: formData.contactPerson && formData.email
+    },
+    {
+      id: 'review',
+      label: 'Verificare Finală',
+      description: 'Validare și confirmare comandă',
+      isComplete: false
     }
-  };
+  ];
+
+  const currentStepIndex = steps.findIndex(step => step.id === currentStep);
+  const completedSteps = steps.slice(0, currentStepIndex).filter(step => step.isComplete);
+
+  // Form submission
+  const handleSubmit = useCallback(async () => {
+    const isValid = await validateForm();
+    if (isValid) {
+      onSubmit?.(formData);
+    }
+  }, [formData, validateForm, onSubmit]);
+
+  // Auto-validation on form changes
+  useEffect(() => {
+    validateForm();
+  }, [validateForm]);
+
+  // Romanian validation trigger
+  useEffect(() => {
+    if (formData.vatNumber && !validationErrors.vatNumber) {
+      const timer = setTimeout(validateRomanianData, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [formData.vatNumber, validationErrors.vatNumber, validateRomanianData]);
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">
-              {order ? 'Edit Order' : 'Create New Order'}
-            </CardTitle>
-            <Button variant="outline" onClick={handleCancel} disabled={isLoading}>
-              <X className="w-4 h-4 mr-2" />
-              Cancel
-            </Button>
-          </div>
-          
-          {/* Progress Indicator */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
-              <span>Step {currentStep} of {totalSteps}</span>
-              <span>{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
-            </div>
-            <div className="w-full bg-slate-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-in-out"
-                style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-              />
-            </div>
-          </div>
+    <div className="order-form-container max-w-4xl mx-auto p-6 space-y-6">
+      {/* Workflow Progress */}
+      <WorkflowProgress
+        currentStage={currentWorkflowStage}
+        completedStages={[]}
+        className="mb-8"
+      />
 
-          {/* Step Labels */}
-          <div className="flex justify-between mt-4 text-xs">
-            <span className={currentStep >= 1 ? 'text-blue-600 font-medium' : 'text-slate-400'}>
-              Client Info
-            </span>
-            <span className={currentStep >= 2 ? 'text-blue-600 font-medium' : 'text-slate-400'}>
-              Pickup Details
-            </span>
-            <span className={currentStep >= 3 ? 'text-blue-600 font-medium' : 'text-slate-400'}>
-              Delivery Details
-            </span>
-            <span className={currentStep >= 4 ? 'text-blue-600 font-medium' : 'text-slate-400'}>
-              Cargo Info
+      {/* Collaboration Indicator */}
+      {mode === 'edit' && activeUsers.length > 0 && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">👥 Colaborare Activă</Badge>
+            <span className="text-sm text-blue-700">
+              {activeUsers.length} utilizator{activeUsers.length > 1 ? 'i' : ''} 
+              {activeUsers.length > 1 ? ' lucrează' : ' lucrează'} la această comandă
             </span>
           </div>
-        </CardHeader>
-
-        <CardContent>
-          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
-            {/* Step Content */}
-            <div className="min-h-[400px]">
-              {renderStepContent()}
+          {activeUsers.map(user => (
+            <div key={user.userId} className="text-xs text-blue-600 mt-1">
+              {user.username} {user.editingField && `editează ${user.editingField}`}
             </div>
+          ))}
+        </Card>
+      )}
 
-            {/* Error Display */}
-            {submitError && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                <div className="flex items-center">
-                  <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                  <span className="text-red-700">{submitError}</span>
-                </div>
+      {/* Step Progress */}
+      <Card className="p-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            {steps[currentStepIndex]?.label}
+          </h2>
+          <p className="text-gray-600">
+            {steps[currentStepIndex]?.description}
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-4 mb-6">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center">
+              <div className={`
+                w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                ${index < currentStepIndex 
+                  ? 'bg-green-500 text-white' 
+                  : index === currentStepIndex 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 text-gray-600'
+                }
+              `}>
+                {index < currentStepIndex ? '✓' : index + 1}
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`
+                  w-12 h-1 mx-2
+                  ${index < currentStepIndex ? 'bg-green-500' : 'bg-gray-200'}
+                `} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Progressive Form Content */}
+        <div className="space-y-4">
+          {renderFormStep(currentStep, formData, validationErrors, handleFieldChange, handleFieldBlur, romanianValidation)}
+        </div>
+
+        {/* Romanian Validation Status */}
+        {romanianValidation && (
+          <Card className="mt-6 p-4 bg-green-50 border-green-200">
+            <h4 className="font-semibold text-green-900 mb-2">
+              ✅ Validare Română Completă
+            </h4>
+            {romanianValidation.pricing && (
+              <div className="text-sm text-green-700">
+                <p>Preț calculat: {formatRomanianCurrency(romanianValidation.pricing.total_cost, 'RON')}</p>
+                <p>TVA inclus: {formatRomanianCurrency(romanianValidation.pricing.vat_calculation.vat_amount, 'RON')}</p>
               </div>
             )}
+          </Card>
+        )}
 
-            {/* Navigation Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-slate-200">
-              <div>
-                {!isFirstStep && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={handlePrevious}
-                    disabled={isLoading}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-2" />
-                    Previous
-                  </Button>
-                )}
-              </div>
+        {/* Navigation */}
+        <div className="flex justify-between mt-8">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const prevStepIndex = Math.max(0, currentStepIndex - 1);
+              setCurrentStep(steps[prevStepIndex].id as any);
+            }}
+            disabled={currentStepIndex === 0}
+          >
+            ← Anterior
+          </Button>
 
-              <div className="flex space-x-3">
-                {!isLastStep ? (
-                  <Button 
-                    type="button" 
-                    onClick={handleNext}
-                    disabled={isLoading}
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                ) : (
-                  <Button 
-                    type="submit" 
-                    disabled={!isValid || isLoading}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        {order ? 'Updating...' : 'Creating...'}
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-2" />
-                        {order ? 'Update Order' : 'Create Order'}
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </form>
-        </CardContent>
+          {currentStepIndex < steps.length - 1 ? (
+            <Button
+              onClick={() => {
+                const nextStepIndex = Math.min(steps.length - 1, currentStepIndex + 1);
+                setCurrentStep(steps[nextStepIndex].id as any);
+              }}
+              disabled={!steps[currentStepIndex].isComplete}
+            >
+              Următorul →
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              disabled={Object.keys(validationErrors).length > 0 || isValidating}
+            >
+              {isValidating ? 'Se validează...' : getLocalizedText('submit', 'forms')}
+            </Button>
+          )}
+        </div>
       </Card>
     </div>
   );
 };
 
-// Step Components
-const ClientInfoStep: React.FC<{
-  register: any;
-  errors: any;
-}> = ({ register, errors }) => (
-  <div className="space-y-6">
-    <div className="flex items-center mb-4">
-      <Building className="w-5 h-5 text-blue-600 mr-2" />
-      <h3 className="text-lg font-semibold">Client Information</h3>
-    </div>
+// Helper render functions
+const renderFormStep = (
+  currentStep: string,
+  formData: OrderFormData,
+  validationErrors: ValidationErrors,
+  handleFieldChange: (field: keyof OrderFormData, value: any) => void,
+  handleFieldBlur: () => void,
+  romanianValidation: any
+) => {
+  switch (currentStep) {
+    case 'company':
+      return renderCompanyStep(formData, validationErrors, handleFieldChange, handleFieldBlur);
+    case 'addresses':
+      return renderAddressesStep(formData, validationErrors, handleFieldChange, handleFieldBlur);
+    case 'cargo':
+      return renderCargoStep(formData, handleFieldChange, handleFieldBlur);
+    case 'contact':
+      return renderContactStep(formData, handleFieldChange, handleFieldBlur);
+    case 'review':
+      return renderReviewStep(formData, romanianValidation);
+    default:
+      return null;
+  }
+};
 
+const renderCompanyStep = (
+  formData: OrderFormData,
+  validationErrors: ValidationErrors,
+  handleFieldChange: (field: keyof OrderFormData, value: any) => void,
+  handleFieldBlur: () => void
+) => {
+  return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Company Name *
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('companyName', 'forms')} *
         </label>
         <Input
-          {...register('client_company_name')}
-          placeholder="Transport Company SRL"
-          className={errors.client_company_name ? 'border-red-500' : ''}
+          value={formData.companyName}
+          onChange={(e) => handleFieldChange('companyName', e.target.value)}
+          onBlur={handleFieldBlur}
+          className={validationErrors.companyName ? 'border-red-500' : ''}
+          placeholder="S.C. Exemplu Transport S.R.L."
         />
-        {errors.client_company_name && (
-          <p className="text-red-500 text-sm mt-1">{errors.client_company_name.message}</p>
+        {validationErrors.companyName && (
+          <p className="text-red-500 text-sm mt-1">{validationErrors.companyName}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          VAT Number *
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('vatNumber', 'forms')} *
         </label>
         <Input
-          {...register('client_vat_number')}
+          value={formData.vatNumber}
+          onChange={(e) => handleFieldChange('vatNumber', e.target.value.toUpperCase())}
+          onBlur={handleFieldBlur}
+          className={validationErrors.vatNumber ? 'border-red-500' : ''}
           placeholder="RO12345678"
-          className={errors.client_vat_number ? 'border-red-500' : ''}
+          maxLength={12}
         />
-        {errors.client_vat_number && (
-          <p className="text-red-500 text-sm mt-1">{errors.client_vat_number.message}</p>
+        {validationErrors.vatNumber && (
+          <p className="text-red-500 text-sm mt-1">{validationErrors.vatNumber}</p>
         )}
-        <p className="text-slate-500 text-xs mt-1">Format: RO followed by 2-10 digits</p>
+        <p className="text-xs text-gray-500 mt-1">Format: RO + 2-10 cifre</p>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Contact Email *
+      <div className="md:col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('registrationNumber', 'forms')}
         </label>
         <Input
-          {...register('client_contact_email')}
+          value={formData.registrationNumber}
+          onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
+          onBlur={handleFieldBlur}
+          placeholder="J40/1234/2023"
+        />
+      </div>
+    </div>
+  );
+};
+
+const renderAddressesStep = (
+  formData: OrderFormData,
+  validationErrors: ValidationErrors,
+  handleFieldChange: (field: keyof OrderFormData, value: any) => void,
+  handleFieldBlur: () => void
+) => {
+  return (
+    <div className="space-y-6">
+      {/* Pickup Address */}
+      <div>
+        <h4 className="font-semibold text-gray-900 mb-4">📍 Adresa de Ridicare</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('street', 'forms')} *
+            </label>
+            <Input
+              value={formData.pickupStreet}
+              onChange={(e) => handleFieldChange('pickupStreet', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="Strada Exemplu"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('number', 'forms')}
+            </label>
+            <Input
+              value={formData.pickupNumber}
+              onChange={(e) => handleFieldChange('pickupNumber', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="123A"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('city', 'forms')} *
+            </label>
+            <Input
+              value={formData.pickupCity}
+              onChange={(e) => handleFieldChange('pickupCity', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="București"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('county', 'forms')} *
+            </label>
+            <Input
+              value={formData.pickupCounty}
+              onChange={(e) => handleFieldChange('pickupCounty', e.target.value.toUpperCase())}
+              onBlur={handleFieldBlur}
+              className={validationErrors.pickupCounty ? 'border-red-500' : ''}
+              placeholder="B"
+              maxLength={2}
+            />
+            {validationErrors.pickupCounty && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.pickupCounty}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('postalCode', 'forms')} *
+            </label>
+            <Input
+              value={formData.pickupPostalCode}
+              onChange={(e) => handleFieldChange('pickupPostalCode', e.target.value)}
+              onBlur={handleFieldBlur}
+              className={validationErrors.pickupPostalCode ? 'border-red-500' : ''}
+              placeholder="012345"
+              maxLength={6}
+            />
+            {validationErrors.pickupPostalCode && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.pickupPostalCode}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Delivery Address */}
+      <div>
+        <h4 className="font-semibold text-gray-900 mb-4">🎯 Adresa de Livrare</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('street', 'forms')} *
+            </label>
+            <Input
+              value={formData.deliveryStreet}
+              onChange={(e) => handleFieldChange('deliveryStreet', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="Strada Destinație"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('number', 'forms')}
+            </label>
+            <Input
+              value={formData.deliveryNumber}
+              onChange={(e) => handleFieldChange('deliveryNumber', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="456B"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('city', 'forms')} *
+            </label>
+            <Input
+              value={formData.deliveryCity}
+              onChange={(e) => handleFieldChange('deliveryCity', e.target.value)}
+              onBlur={handleFieldBlur}
+              placeholder="Cluj-Napoca"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('county', 'forms')} *
+            </label>
+            <Input
+              value={formData.deliveryCounty}
+              onChange={(e) => handleFieldChange('deliveryCounty', e.target.value.toUpperCase())}
+              onBlur={handleFieldBlur}
+              className={validationErrors.deliveryCounty ? 'border-red-500' : ''}
+              placeholder="CJ"
+              maxLength={2}
+            />
+            {validationErrors.deliveryCounty && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.deliveryCounty}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {getLocalizedText('postalCode', 'forms')} *
+            </label>
+            <Input
+              value={formData.deliveryPostalCode}
+              onChange={(e) => handleFieldChange('deliveryPostalCode', e.target.value)}
+              onBlur={handleFieldBlur}
+              className={validationErrors.deliveryPostalCode ? 'border-red-500' : ''}
+              placeholder="400001"
+              maxLength={6}
+            />
+            {validationErrors.deliveryPostalCode && (
+              <p className="text-red-500 text-sm mt-1">{validationErrors.deliveryPostalCode}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const renderCargoStep = (
+  formData: OrderFormData,
+  handleFieldChange: (field: keyof OrderFormData, value: any) => void,
+  handleFieldBlur: () => void
+) => {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('description', 'forms')} *
+        </label>
+        <textarea
+          className="w-full p-3 border border-gray-300 rounded-md"
+          rows={3}
+          value={formData.description}
+          onChange={(e) => handleFieldChange('description', e.target.value)}
+          onBlur={handleFieldBlur}
+          placeholder="Descrierea mărfii transportate..."
+        />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {getLocalizedText('weight', 'forms')} *
+          </label>
+          <Input
+            type="number"
+            value={formData.weight}
+            onChange={(e) => handleFieldChange('weight', parseFloat(e.target.value) || 0)}
+            onBlur={handleFieldBlur}
+            placeholder="1000"
+            min="0"
+            step="0.1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {getLocalizedText('volume', 'forms')}
+          </label>
+          <Input
+            type="number"
+            value={formData.volume}
+            onChange={(e) => handleFieldChange('volume', parseFloat(e.target.value) || 0)}
+            onBlur={handleFieldBlur}
+            placeholder="10.5"
+            min="0"
+            step="0.1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {getLocalizedText('length', 'forms')}
+          </label>
+          <Input
+            type="number"
+            value={formData.length}
+            onChange={(e) => handleFieldChange('length', parseFloat(e.target.value) || 0)}
+            onBlur={handleFieldBlur}
+            placeholder="240"
+            min="0"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {getLocalizedText('width', 'forms')}
+          </label>
+          <Input
+            type="number"
+            value={formData.width}
+            onChange={(e) => handleFieldChange('width', parseFloat(e.target.value) || 0)}
+            onBlur={handleFieldBlur}
+            placeholder="240"
+            min="0"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const renderContactStep = (
+  formData: OrderFormData,
+  handleFieldChange: (field: keyof OrderFormData, value: any) => void,
+  handleFieldBlur: () => void
+) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('contactPerson', 'forms')} *
+        </label>
+        <Input
+          value={formData.contactPerson}
+          onChange={(e) => handleFieldChange('contactPerson', e.target.value)}
+          onBlur={handleFieldBlur}
+          placeholder="Ion Popescu"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('phone', 'forms')} *
+        </label>
+        <Input
+          value={formData.phone}
+          onChange={(e) => handleFieldChange('phone', e.target.value)}
+          onBlur={handleFieldBlur}
+          placeholder="+40 7XX XXX XXX"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {getLocalizedText('email', 'forms')} *
+        </label>
+        <Input
           type="email"
-          placeholder="contact@company.ro"
-          className={errors.client_contact_email ? 'border-red-500' : ''}
+          value={formData.email}
+          onChange={(e) => handleFieldChange('email', e.target.value)}
+          onBlur={handleFieldBlur}
+          placeholder="contact@exemplu.ro"
         />
-        {errors.client_contact_email && (
-          <p className="text-red-500 text-sm mt-1">{errors.client_contact_email.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Offered Price (EUR) *
-        </label>
-        <Input
-          {...register('client_offered_price', { valueAsNumber: true })}
-          type="number"
-          step="0.01"
-          min="1"
-          max="100000"
-          placeholder="1500.00"
-          className={errors.client_offered_price ? 'border-red-500' : ''}
-        />
-        {errors.client_offered_price && (
-          <p className="text-red-500 text-sm mt-1">{errors.client_offered_price.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Payment Terms
-        </label>
-        <Input
-          {...register('client_payment_terms')}
-          placeholder="30 days after delivery"
-          className={errors.client_payment_terms ? 'border-red-500' : ''}
-        />
-        {errors.client_payment_terms && (
-          <p className="text-red-500 text-sm mt-1">{errors.client_payment_terms.message}</p>
-        )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-const PickupInfoStep: React.FC<{
-  register: any;
-  errors: any;
-}> = ({ register, errors }) => (
-  <div className="space-y-6">
-    <div className="flex items-center mb-4">
-      <MapPin className="w-5 h-5 text-green-600 mr-2" />
-      <h3 className="text-lg font-semibold">Pickup Information</h3>
-    </div>
-
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Pickup Address *
-        </label>
-        <textarea
-          {...register('pickup_address')}
-          rows={3}
-          placeholder="Strada Industriei 123, Sector 4"
-          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-            errors.pickup_address ? 'border-red-500' : 'border-slate-300'
-          }`}
-        />
-        {errors.pickup_address && (
-          <p className="text-red-500 text-sm mt-1">{errors.pickup_address.message}</p>
-        )}
+const renderReviewStep = (formData: OrderFormData, romanianValidation: any) => {
+  return (
+    <div className="space-y-6">
+      <h4 className="font-semibold text-gray-900">📋 Verificare Finală</h4>
+      
+      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+        <div><strong>Companie:</strong> {formData.companyName}</div>
+        <div><strong>TVA:</strong> {formData.vatNumber}</div>
+        <div><strong>Transport:</strong> {formData.pickupCity} → {formData.deliveryCity}</div>
+        <div><strong>Marfă:</strong> {formData.description}</div>
+        <div><strong>Greutate:</strong> {formData.weight} kg</div>
+        <div><strong>Contact:</strong> {formData.contactPerson} ({formData.email})</div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Postcode *
-          </label>
-          <Input
-            {...register('pickup_postcode')}
-            placeholder="123456"
-            maxLength={6}
-            className={errors.pickup_postcode ? 'border-red-500' : ''}
-          />
-          {errors.pickup_postcode && (
-            <p className="text-red-500 text-sm mt-1">{errors.pickup_postcode.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            City *
-          </label>
-          <Input
-            {...register('pickup_city')}
-            placeholder="Bucuresti"
-            className={errors.pickup_city ? 'border-red-500' : ''}
-          />
-          {errors.pickup_city && (
-            <p className="text-red-500 text-sm mt-1">{errors.pickup_city.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Country
-          </label>
-          <Input
-            {...register('pickup_country')}
-            placeholder="RO"
-            maxLength={2}
-            className={errors.pickup_country ? 'border-red-500' : ''}
-          />
-          {errors.pickup_country && (
-            <p className="text-red-500 text-sm mt-1">{errors.pickup_country.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Pickup Date From
-          </label>
-          <Input
-            {...register('pickup_date_start')}
-            type="date"
-            className={errors.pickup_date_start ? 'border-red-500' : ''}
-          />
-          {errors.pickup_date_start && (
-            <p className="text-red-500 text-sm mt-1">{errors.pickup_date_start.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Pickup Date To
-          </label>
-          <Input
-            {...register('pickup_date_end')}
-            type="date"
-            className={errors.pickup_date_end ? 'border-red-500' : ''}
-          />
-          {errors.pickup_date_end && (
-            <p className="text-red-500 text-sm mt-1">{errors.pickup_date_end.message}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-const DeliveryInfoStep: React.FC<{
-  register: any;
-  errors: any;
-}> = ({ register, errors }) => (
-  <div className="space-y-6">
-    <div className="flex items-center mb-4">
-      <MapPin className="w-5 h-5 text-orange-600 mr-2" />
-      <h3 className="text-lg font-semibold">Delivery Information</h3>
-    </div>
-
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Delivery Address *
-        </label>
-        <textarea
-          {...register('delivery_address')}
-          rows={3}
-          placeholder="Bulevardul Magheru 456, Sector 1"
-          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-            errors.delivery_address ? 'border-red-500' : 'border-slate-300'
-          }`}
-        />
-        {errors.delivery_address && (
-          <p className="text-red-500 text-sm mt-1">{errors.delivery_address.message}</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Postcode *
-          </label>
-          <Input
-            {...register('delivery_postcode')}
-            placeholder="789012"
-            maxLength={6}
-            className={errors.delivery_postcode ? 'border-red-500' : ''}
-          />
-          {errors.delivery_postcode && (
-            <p className="text-red-500 text-sm mt-1">{errors.delivery_postcode.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            City *
-          </label>
-          <Input
-            {...register('delivery_city')}
-            placeholder="Cluj-Napoca"
-            className={errors.delivery_city ? 'border-red-500' : ''}
-          />
-          {errors.delivery_city && (
-            <p className="text-red-500 text-sm mt-1">{errors.delivery_city.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Country
-          </label>
-          <Input
-            {...register('delivery_country')}
-            placeholder="RO"
-            maxLength={2}
-            className={errors.delivery_country ? 'border-red-500' : ''}
-          />
-          {errors.delivery_country && (
-            <p className="text-red-500 text-sm mt-1">{errors.delivery_country.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Delivery Date From
-          </label>
-          <Input
-            {...register('delivery_date_start')}
-            type="date"
-            className={errors.delivery_date_start ? 'border-red-500' : ''}
-          />
-          {errors.delivery_date_start && (
-            <p className="text-red-500 text-sm mt-1">{errors.delivery_date_start.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Delivery Date To
-          </label>
-          <Input
-            {...register('delivery_date_end')}
-            type="date"
-            className={errors.delivery_date_end ? 'border-red-500' : ''}
-          />
-          {errors.delivery_date_end && (
-            <p className="text-red-500 text-sm mt-1">{errors.delivery_date_end.message}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-const CargoInfoStep: React.FC<{
-  register: any;
-  errors: any;
-}> = ({ register, errors }) => (
-  <div className="space-y-6">
-    <div className="flex items-center mb-4">
-      <Package className="w-5 h-5 text-purple-600 mr-2" />
-      <h3 className="text-lg font-semibold">Cargo Information</h3>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          LDM (Loading Meters)
-        </label>
-        <Input
-          {...register('cargo_ldm', { valueAsNumber: true })}
-          type="number"
-          step="0.1"
-          min="0.1"
-          max="33"
-          placeholder="2.4"
-          className={errors.cargo_ldm ? 'border-red-500' : ''}
-        />
-        {errors.cargo_ldm && (
-          <p className="text-red-500 text-sm mt-1">{errors.cargo_ldm.message}</p>
-        )}
-        <p className="text-slate-500 text-xs mt-1">Maximum: 33 meters</p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Weight (kg)
-        </label>
-        <Input
-          {...register('cargo_weight_kg', { valueAsNumber: true })}
-          type="number"
-          min="1"
-          max="40000"
-          placeholder="1000"
-          className={errors.cargo_weight_kg ? 'border-red-500' : ''}
-        />
-        {errors.cargo_weight_kg && (
-          <p className="text-red-500 text-sm mt-1">{errors.cargo_weight_kg.message}</p>
-        )}
-        <p className="text-slate-500 text-xs mt-1">Maximum: 40,000 kg</p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Number of Pallets
-        </label>
-        <Input
-          {...register('cargo_pallets', { valueAsNumber: true })}
-          type="number"
-          min="1"
-          max="33"
-          placeholder="4"
-          className={errors.cargo_pallets ? 'border-red-500' : ''}
-        />
-        {errors.cargo_pallets && (
-          <p className="text-red-500 text-sm mt-1">{errors.cargo_pallets.message}</p>
-        )}
-        <p className="text-slate-500 text-xs mt-1">Maximum: 33 pallets</p>
-      </div>
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        Cargo Description
-      </label>
-      <textarea
-        {...register('cargo_description')}
-        rows={3}
-        placeholder="Electronics, furniture, machinery..."
-        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-          errors.cargo_description ? 'border-red-500' : 'border-slate-300'
-        }`}
-      />
-      {errors.cargo_description && (
-        <p className="text-red-500 text-sm mt-1">{errors.cargo_description.message}</p>
+      {romanianValidation?.pricing && (
+        <Card className="p-4 bg-blue-50">
+          <h5 className="font-semibold mb-2">💰 Estimare Preț</h5>
+          <div className="space-y-1 text-sm">
+            <div>Cost de bază: {formatRomanianCurrency(romanianValidation.pricing.base_cost, 'RON')}</div>
+            <div>TVA (19%): {formatRomanianCurrency(romanianValidation.pricing.vat_calculation.vat_amount, 'RON')}</div>
+            <div className="font-semibold">
+              Total: {formatRomanianCurrency(romanianValidation.pricing.total_cost, 'RON')}
+            </div>
+          </div>
+        </Card>
       )}
     </div>
+  );
+};
 
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        Special Requirements
-      </label>
-      <textarea
-        {...register('special_requirements')}
-        rows={3}
-        placeholder="Temperature controlled, fragile handling, security requirements..."
-        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-          errors.special_requirements ? 'border-red-500' : 'border-slate-300'
-        }`}
-      />
-      {errors.special_requirements && (
-        <p className="text-red-500 text-sm mt-1">{errors.special_requirements.message}</p>
-      )}
-    </div>
-
-    <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-      <div className="flex items-start">
-        <CheckCircle className="w-5 h-5 text-blue-500 mr-2 mt-0.5" />
-        <div className="text-sm">
-          <p className="font-medium text-blue-900">Ready to Submit</p>
-          <p className="text-blue-700">
-            Review all information and click "Create Order" to submit your transport request.
-            You'll be able to edit the order details after creation if needed.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+export default OrderForm;

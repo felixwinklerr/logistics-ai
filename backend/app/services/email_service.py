@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
 
-import aioredis
+import redis.asyncio as redis
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +54,7 @@ class Email:
 class EmailMonitoringService:
     """Core email monitoring service with async IMAP and background processing"""
     
-    def __init__(self, redis_client: aioredis.Redis):
+    def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
         self.settings = get_settings()
         self.accounts = {}
@@ -316,7 +316,7 @@ async def get_email_monitoring_service() -> EmailMonitoringService:
     if email_monitoring_service is None:
         # Initialize Redis connection
         redis_url = get_settings().redis_url
-        redis_client = await aioredis.from_url(redis_url)
+        redis_client = await redis.from_url(redis_url)
         
         # Create and initialize service
         email_monitoring_service = EmailMonitoringService(redis_client)
