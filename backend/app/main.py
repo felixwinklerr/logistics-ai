@@ -105,10 +105,10 @@ app.add_middleware(ExceptionHandlerMiddleware)
 
 # Trusted host middleware
 if not settings.debug:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.allowed_hosts
-    )
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.allowed_hosts
+)
 
 # Exception handlers
 app.add_exception_handler(RequestValidationError, validation_exception_handler)

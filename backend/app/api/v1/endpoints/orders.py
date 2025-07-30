@@ -75,8 +75,8 @@ async def create_order_romanian(
         
         if not result["success"]:
             logger.warning(f"Romanian order creation failed: {result['errors']}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "message": "Romanian business validation failed",
                     "errors": result["errors"],

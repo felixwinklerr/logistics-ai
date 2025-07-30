@@ -65,9 +65,9 @@ interface ValidationErrors {
   [key: string]: string;
 }
 
-export const OrderForm: React.FC<OrderFormProps> = ({
+export const OrderForm: React.FC<OrderFormProps> = ({ 
   initialData = {},
-  onSubmit,
+  onSubmit, 
   onValidationChange,
   mode = 'create',
   orderId
@@ -168,7 +168,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       stopEditing();
     }
   }, [mode, isConnected, stopEditing]);
-
+      
   // Validate Romanian business data
   const validateRomanianData = useCallback(async () => {
     if (!formData.vatNumber || Object.keys(validationErrors).length > 0) {
@@ -311,12 +311,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               )}
             </div>
           ))}
-        </div>
+          </div>
 
         {/* Progressive Form Content */}
         <div className="space-y-4">
           {renderFormStep(currentStep, formData, validationErrors, handleFieldChange, handleFieldBlur, romanianValidation)}
-        </div>
+            </div>
 
         {/* Romanian Validation Status */}
         {romanianValidation && (
@@ -335,36 +335,36 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
         {/* Navigation */}
         <div className="flex justify-between mt-8">
-          <Button
-            variant="outline"
+                  <Button 
+                    variant="outline" 
             onClick={() => {
               const prevStepIndex = Math.max(0, currentStepIndex - 1);
               setCurrentStep(steps[prevStepIndex].id as any);
             }}
             disabled={currentStepIndex === 0}
-          >
+                  >
             ← Anterior
-          </Button>
+                  </Button>
 
           {currentStepIndex < steps.length - 1 ? (
-            <Button
+                  <Button 
               onClick={() => {
                 const nextStepIndex = Math.min(steps.length - 1, currentStepIndex + 1);
                 setCurrentStep(steps[nextStepIndex].id as any);
               }}
               disabled={!steps[currentStepIndex].isComplete}
-            >
+                  >
               Următorul →
-            </Button>
-          ) : (
-            <Button
+                  </Button>
+                ) : (
+                  <Button 
               onClick={handleSubmit}
               disabled={Object.keys(validationErrors).length > 0 || isValidating}
-            >
+                  >
               {isValidating ? 'Se validează...' : getLocalizedText('submit', 'forms')}
-            </Button>
-          )}
-        </div>
+                  </Button>
+                )}
+              </div>
       </Card>
     </div>
   );
@@ -500,111 +500,111 @@ const renderAddressesStep = (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('county', 'forms')} *
-            </label>
-            <Input
+        </label>
+        <Input
               value={formData.pickupCounty}
               onChange={(e) => handleFieldChange('pickupCounty', e.target.value.toUpperCase())}
               onBlur={handleFieldBlur}
               className={validationErrors.pickupCounty ? 'border-red-500' : ''}
               placeholder="B"
               maxLength={2}
-            />
+        />
             {validationErrors.pickupCounty && (
               <p className="text-red-500 text-sm mt-1">{validationErrors.pickupCounty}</p>
-            )}
-          </div>
-          <div>
+        )}
+      </div>
+      <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('postalCode', 'forms')} *
-            </label>
-            <Input
+        </label>
+        <Input
               value={formData.pickupPostalCode}
               onChange={(e) => handleFieldChange('pickupPostalCode', e.target.value)}
               onBlur={handleFieldBlur}
               className={validationErrors.pickupPostalCode ? 'border-red-500' : ''}
               placeholder="012345"
               maxLength={6}
-            />
+        />
             {validationErrors.pickupPostalCode && (
               <p className="text-red-500 text-sm mt-1">{validationErrors.pickupPostalCode}</p>
-            )}
-          </div>
-        </div>
+        )}
       </div>
+    </div>
+  </div>
 
       {/* Delivery Address */}
       <div>
         <h4 className="font-semibold text-gray-900 mb-4">🎯 Adresa de Livrare</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('street', 'forms')} *
-            </label>
-            <Input
+          </label>
+          <Input
               value={formData.deliveryStreet}
               onChange={(e) => handleFieldChange('deliveryStreet', e.target.value)}
               onBlur={handleFieldBlur}
               placeholder="Strada Destinație"
             />
-          </div>
-          <div>
+        </div>
+        <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('number', 'forms')}
-            </label>
-            <Input
+          </label>
+          <Input
               value={formData.deliveryNumber}
               onChange={(e) => handleFieldChange('deliveryNumber', e.target.value)}
               onBlur={handleFieldBlur}
               placeholder="456B"
             />
-          </div>
-          <div>
+        </div>
+        <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('city', 'forms')} *
-            </label>
-            <Input
+          </label>
+          <Input
               value={formData.deliveryCity}
               onChange={(e) => handleFieldChange('deliveryCity', e.target.value)}
               onBlur={handleFieldBlur}
               placeholder="Cluj-Napoca"
             />
-          </div>
-          <div>
+      </div>
+        <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('county', 'forms')} *
-            </label>
-            <Input
+          </label>
+          <Input
               value={formData.deliveryCounty}
               onChange={(e) => handleFieldChange('deliveryCounty', e.target.value.toUpperCase())}
               onBlur={handleFieldBlur}
               className={validationErrors.deliveryCounty ? 'border-red-500' : ''}
               placeholder="CJ"
               maxLength={2}
-            />
+          />
             {validationErrors.deliveryCounty && (
               <p className="text-red-500 text-sm mt-1">{validationErrors.deliveryCounty}</p>
-            )}
-          </div>
-          <div>
+          )}
+        </div>
+        <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {getLocalizedText('postalCode', 'forms')} *
-            </label>
-            <Input
+          </label>
+          <Input
               value={formData.deliveryPostalCode}
               onChange={(e) => handleFieldChange('deliveryPostalCode', e.target.value)}
               onBlur={handleFieldBlur}
               className={validationErrors.deliveryPostalCode ? 'border-red-500' : ''}
               placeholder="400001"
               maxLength={6}
-            />
+          />
             {validationErrors.deliveryPostalCode && (
               <p className="text-red-500 text-sm mt-1">{validationErrors.deliveryPostalCode}</p>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 const renderCargoStep = (
@@ -682,10 +682,10 @@ const renderCargoStep = (
             placeholder="240"
             min="0"
           />
-        </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 const renderContactStep = (
@@ -745,7 +745,7 @@ const renderReviewStep = (formData: OrderFormData, romanianValidation: any) => {
         <div><strong>Marfă:</strong> {formData.description}</div>
         <div><strong>Greutate:</strong> {formData.weight} kg</div>
         <div><strong>Contact:</strong> {formData.contactPerson} ({formData.email})</div>
-      </div>
+    </div>
 
       {romanianValidation?.pricing && (
         <Card className="p-4 bg-blue-50">
@@ -755,12 +755,12 @@ const renderReviewStep = (formData: OrderFormData, romanianValidation: any) => {
             <div>TVA (19%): {formatRomanianCurrency(romanianValidation.pricing.vat_calculation.vat_amount, 'RON')}</div>
             <div className="font-semibold">
               Total: {formatRomanianCurrency(romanianValidation.pricing.total_cost, 'RON')}
-            </div>
-          </div>
+        </div>
+      </div>
         </Card>
       )}
-    </div>
-  );
+  </div>
+);
 };
 
 export default OrderForm;
